@@ -68,7 +68,7 @@ io.on('connection', (socket) => {
 
     socket.on('verifyAttendanceCode', ({ studentId, code }) => {
         if (!studentId || !code || !teacherCodes[code] || !students[studentId]) {
-            console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya öğrenci bulunamadı.`));
+            console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya öğrenci bulunamadı. (${studentId}) (${code})`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Yanlış kod veya öğrenci bulunamadı.' });
             return;
         }
