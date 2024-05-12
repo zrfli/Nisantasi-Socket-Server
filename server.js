@@ -76,8 +76,8 @@ io.on('connection', (socket) => {
         const teacherId = teacherCodes[code].teacherId;
     
         // Öğrencinin en son doğruladığı kodu kontrol et
-        const latestCode = Object.keys(students[studentId].attendanceCode || {}).pop(); // Öğrencinin son kodu
-        if (latestCode !== code) {
+        const latestCode = students[studentId].attendanceCode;
+        if (latestCode && latestCode !== code) {
             console.log(colors.red(`[${getLocalTime()}] Hata: Öğrencinin eski bir kodla doğrulama girişimi (${studentId})`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Eski kodlarla doğrulama yapılamaz.' });
             return;
@@ -88,12 +88,6 @@ io.on('connection', (socket) => {
             console.log(colors.yellow(`[${getLocalTime()}] Uyarı: ${students[studentId].name} (${studentId}) zaten bu kodu doğruladı.`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Bu kod zaten doğrulandı.' });
             return;
-        }
-    
-        // Remove previous attendance code (if any) associated with this student
-        if (students[studentId].attendanceCode) {
-            const previousCode = students[studentId].attendanceCode;
-            delete teacherCodes[previousCode];
         }
     
         // Mark the student's attendance code as verified with the new code
