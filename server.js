@@ -15,7 +15,7 @@ const studentHash = '2';
 
 const teachers = {};
 const students = {};
-let teacherCurrentCode = {}; // Öğretmenin mevcut kodunu tutmak için kullanılacak
+const teacherCodes = {};
 
 io.engine.on("headers", (headers, req) => {
     headers["Access-Control-Allow-Origin"] = "http://misy.000.pe";
@@ -46,8 +46,7 @@ io.on('connection', (socket) => {
             socket.emit('loginSuccess', { userId: teacherId, role: 'teacher' });
             console.log(colors.green(`[${getLocalTime()}] Başarılı: ${teacherId} olarak öğretmen oturumu açıldı.`));
 
-            // Öğretmen için yeni kod oluşturulup emit ediliyor
-            generateNewTeacherCode(teacherId);
+            generateAttendanceCodeForTeacher(teacherId);
         } else if (passwordHash === studentHash) {
             const studentId = userId;
             const studentFullName = userName;
@@ -68,24 +67,38 @@ io.on('connection', (socket) => {
     });
 
     socket.on('verifyAttendanceCode', ({ studentId, code }) => {
-        if (!studentId || !code || !teacherCurrentCode[code] || !students[studentId]) {
+        if (!studentId || !code || !teacherCodes[code] || !students[studentId]) {
             console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya öğrenci bulunamadı. (${studentId}) (${code})`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Yanlış kod veya öğrenci bulunamadı.' });
             return;
         }
     
-        const teacherId = teacherCurrentCode[code];
+        const teacherId = teacherCodes[code].teacherId;
     
         // Öğrencinin en son doğruladığı kodu kontrol et
-        const latestCode = students[studentId].attendanceCode;
-        if (latestCode === code) {
+        const latestCode = Object.keys(students[studentId].attendanceCode || {}).pop(); // Öğrencinin son kodu
+        if (latestCode !== code) {
+            console.log(colors.red(`[${getLocalTime()}] Hata: Öğrencinin eski bir kodla doğrulama girişimi (${studentId})`));
+            socket.emit('verifyAttendanceResult', { success: false, message: 'Eski kodlarla doğrulama yapılamaz.' });
+            return;
+        }
+    
+        // Check if this student's attendance code was previously verified
+        if (students[studentId].attendanceCode === code) {
             console.log(colors.yellow(`[${getLocalTime()}] Uyarı: ${students[studentId].name} (${studentId}) zaten bu kodu doğruladı.`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Bu kod zaten doğrulandı.' });
             return;
         }
     
+        // Remove previous attendance code (if any) associated with this student
+        if (students[studentId].attendanceCode) {
+            const previousCode = students[studentId].attendanceCode;
+            delete teacherCodes[previousCode];
+        }
+    
         // Mark the student's attendance code as verified with the new code
         students[studentId].attendanceCode = code;
+        teacherCodes[code] = { teacherId };
     
         // Notify the corresponding teacher about the student's attendance
         if (teachers[teacherId] && teachers[teacherId].socketId) {
@@ -93,8 +106,14 @@ io.on('connection', (socket) => {
             io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
             console.log(colors.cyan(`[${getLocalTime()}] ${students[studentId].name} (${studentId}) öğretmene kodu doğruladı: ${teacherId}`));
     
+            // Optionally, update the connected students list for the teacher
+            updateConnectedStudentsList(teachers[teacherId].socketId);
+    
             // Send verification result back to the student
             socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
+    
+            // Disconnect student's session after notifying the teacher
+            disconnectStudentSession(studentId);
         } else {
             // If teacher not found or teacher's socket not available
             console.log(colors.red(`[${getLocalTime()}] Hata: Öğretmen bulunamadı veya bağlantı yok. (${teacherId})`));
@@ -115,13 +134,23 @@ io.on('connection', (socket) => {
         }
     });
 
-    function generateNewTeacherCode(teacherId) {
-        setInterval(() => {
-            const newCode = generateNumericAttendanceCode();
-            teacherCurrentCode[teacherId] = newCode;
-            io.to(teachers[teacherId].socketId).emit('teacherNewCode', { code: newCode });
-            console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${newCode}`));
-        }, 30000); // Her 30 saniyede bir yeni kod oluştur
+    function generateAttendanceCodeForTeacher(teacherId) {
+        const attendanceCode = generateAttendanceCode();
+        teacherCodes[attendanceCode] = { teacherId };
+
+        if (teachers[teacherId] && teachers[teacherId].socketId) {
+            io.to(teachers[teacherId].socketId).emit('attendanceCodeGenerated', { code: attendanceCode });
+            console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yoklama kodu oluşturuldu ve öğretmene gönderildi: ${attendanceCode}`));
+
+            setInterval(() => {
+                const newAttendanceCode = generateAttendanceCode();
+                teacherCodes[newAttendanceCode] = { teacherId };
+                if (teachers[teacherId] && teachers[teacherId].socketId) {
+                    io.to(teachers[teacherId].socketId).emit('attendanceCodeGenerated', { code: newAttendanceCode });
+                    console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yoklama kodu güncellendi ve öğretmene gönderildi: ${newAttendanceCode}`));
+                }
+            }, 40000);
+        }
     }
 
     function disconnectStudentSession(studentId) {
@@ -145,8 +174,9 @@ io.on('connection', (socket) => {
             delete teachers[teacherId];
             console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${teacherId} öğretmen oturumu kapatıldı.`));
     
-            // Öğretmene ait kodu temizle
-            delete teacherCurrentCode[teacherId];
+            // Öğretmene ait yoklama kodlarını temizle
+            const attendanceCodes = Object.keys(teacherCodes).filter(code => teacherCodes[code].teacherId === teacherId);
+            attendanceCodes.forEach(code => delete teacherCodes[code]);
     
             // Öğretmenin öğrencilere gönderdiği bağlantıları temizle
             const connectedStudents = Object.values(students).filter(student => student.socketId && student.socketId !== teacherSocketId);
@@ -162,8 +192,13 @@ io.on('connection', (socket) => {
             console.log(colors.red(`[${getLocalTime()}] Hata: ${teacherId} öğretmeni bulunamadı.`));
         }
     }
+    
+    function updateConnectedStudentsList(socketId) {
+        const connectedStudents = Object.values(students).filter(student => student.socketId && student.socketId !== socketId);
+        io.to(socketId).emit('connectedStudentsList', { students: connectedStudents });
+    }
 
-    function generateNumericAttendanceCode() {
+    function generateAttendanceCode() {
         return Math.floor(100000 + Math.random() * 900000); // 6 haneli sayı üret
     }
 
@@ -177,10 +212,11 @@ io.on('connection', (socket) => {
         if (teachers[userId]) {
             const teacherId = userId;
             delete teachers[teacherId];
-            if (teacherCurrentCode[teacherId]) {
-                delete teacherCurrentCode[teacherId];
+            if (teacherCodes[socket.id]) {
+                delete teacherCodes[socket.id];
             }
             console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${teacherId} öğretmen çıkış yaptı.`));
+            updateConnectedStudentsList(socket.id);
         } else if (students[userId]) {
             const studentId = userId;
             delete students[studentId].attendanceCode;
