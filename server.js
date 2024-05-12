@@ -145,23 +145,16 @@ io.on('connection', (socket) => {
     }
 
     function disconnectStudentSession(studentId) {
-        const studentSocketId = students[studentId].socketId;
-        const teacherId = Object.keys(teachers).find(key => teachers[key].socketId === studentSocketId);
-
-        // Remove student from connected students list of the teacher
-        if (teacherId && teachers[teacherId].socketId) {
-            const connectedStudents = Object.values(students).filter(student => student.socketId && student.socketId !== teachers[teacherId].socketId);
-            io.to(teachers[teacherId].socketId).emit('connectedStudentsList', { students: connectedStudents });
+        const student = students[studentId];
+        if (student && student.socketId && io.sockets.sockets[student.socketId]) {
+            io.sockets.sockets[student.socketId].disconnect(true);
+            // Clean up student data
+            delete students[studentId].attendanceCode;
+            delete students[studentId];
+            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${studentId} öğrenci oturumu kapatıldı.`));
+        } else {
+            console.log(colors.red(`[${getLocalTime()}] Hata: Belirtilen öğrenci soketi bulunamadı veya zaten kapalı.`));
         }
-
-        // Disconnect student's session
-        io.sockets.sockets[studentSocketId].disconnect(true);
-
-        // Clean up student data
-        delete students[studentId].attendanceCode;
-        delete students[studentId];
-
-        console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${studentId} öğrenci oturumu kapatıldı.`));
     }
 
     function findUserIdBySocketId(socketId) {
