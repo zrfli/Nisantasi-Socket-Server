@@ -76,24 +76,11 @@ io.on('connection', (socket) => {
         const teacherId = teacherCodes[code].teacherId;
     
         // Öğrencinin en son doğruladığı kodu kontrol et
-        const latestCode = Object.keys(students[studentId].attendanceCode || {}).pop(); // Öğrencinin son kodu
+        const latestCode = students[studentId].attendanceCode;
         if (latestCode !== code) {
             console.log(colors.red(`[${getLocalTime()}] Hata: Öğrencinin eski bir kodla doğrulama girişimi (${studentId})`));
             socket.emit('verifyAttendanceResult', { success: false, message: 'Eski kodlarla doğrulama yapılamaz.' });
             return;
-        }
-    
-        // Check if this student's attendance code was previously verified
-        if (students[studentId].attendanceCode === code) {
-            console.log(colors.yellow(`[${getLocalTime()}] Uyarı: ${students[studentId].name} (${studentId}) zaten bu kodu doğruladı.`));
-            socket.emit('verifyAttendanceResult', { success: false, message: 'Bu kod zaten doğrulandı.' });
-            return;
-        }
-    
-        // Remove previous attendance code (if any) associated with this student
-        if (students[studentId].attendanceCode) {
-            const previousCode = students[studentId].attendanceCode;
-            delete teacherCodes[previousCode];
         }
     
         // Mark the student's attendance code as verified with the new code
@@ -124,12 +111,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         const userId = findUserIdBySocketId(socket.id);
         if (userId) {
-            handleUserDisconnect(socket, userId);
-
             if (teachers[userId]) {
                 closeTeacherSession(userId); 
             } else if (students[userId]) {
-                closeStudentSession(userId);
+                disconnectStudentSession(userId);
             }
         }
     });
@@ -208,21 +193,8 @@ io.on('connection', (socket) => {
         return Object.keys(students).find(key => students[key].socketId === socketId);
     }
 
-    function handleUserDisconnect(socket, userId) {
-        if (teachers[userId]) {
-            const teacherId = userId;
-            delete teachers[teacherId];
-            if (teacherCodes[socket.id]) {
-                delete teacherCodes[socket.id];
-            }
-            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${teacherId} öğretmen çıkış yaptı.`));
-            updateConnectedStudentsList(socket.id);
-        } else if (students[userId]) {
-            const studentId = userId;
-            delete students[studentId].attendanceCode;
-            delete students[studentId];
-            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${studentId} öğrenci çıkış yaptı.`));
-        }
+    function getLocalTime() {
+        return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
     }
 });
 
@@ -236,7 +208,3 @@ setInterval(clearConsole, 60000);
 server.listen(8080, () => {
     console.log(colors.cyan(`[${getLocalTime()}] Bilgi: Sunucu dinleniyor - http://localhost:8080`));
 });
-
-function getLocalTime() {
-    return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
-}
