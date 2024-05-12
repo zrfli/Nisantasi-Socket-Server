@@ -20,8 +20,8 @@ const teacherCodes = {};
 io.engine.on("headers", (headers, req) => {
     headers["Access-Control-Allow-Origin"] = "http://misy.000.pe"
     headers["Access-Control-Allow-Headers"] = "origin, x-requested-with, content-type"
-    headers["Access-Control-Allow-Methodsn"] = "PUT, GET, POST, DELETE, OPTIONS"
-})
+    headers["Access-Control-Allow-Methods"] = "PUT, GET, POST, DELETE, OPTIONS"
+});
 
 io.on('connection', (socket) => {
     console.log(colors.yellow(`[${getLocalTime()}] Yeni bir kullanıcı bağlandı`));
@@ -83,11 +83,9 @@ io.on('connection', (socket) => {
     
         students[studentId].attendanceCode = code;
     
-        if (teachers[teacherId] && teachers[teacherId].socketId) {
+        if (teachers[teacherId] && teachers[teacherId].socketId === socket.id) {
             io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
             console.log(colors.cyan(`[${getLocalTime()}] ${students[studentId].name} (${studentId}) öğretmen kodunu girdi: ${teacherId}`));
-    
-            updateConnectedStudentsList(teachers[teacherId].socketId);
     
             socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
         }
@@ -119,11 +117,6 @@ io.on('connection', (socket) => {
         }
     }
 
-    function updateConnectedStudentsList(socketId) {
-        const connectedStudents = Object.values(students).filter(student => student.socketId && student.socketId !== socketId);
-        io.to(socketId).emit('connectedStudentsList', { students: connectedStudents });
-    }
-
     function generateAttendanceCode() {
         return Math.random().toString(36).substr(2, 6).toUpperCase();
     }
@@ -142,7 +135,6 @@ io.on('connection', (socket) => {
                 delete teacherCodes[socket.id];
             }
             console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${teacherId} öğretmen çıkış yaptı.`));
-            updateConnectedStudentsList(socket.id);
         } else if (students[userId]) {
             const studentId = userId;
             delete students[studentId].attendanceCode;
@@ -160,7 +152,7 @@ const clearConsole = () => {
 setInterval(clearConsole, 60000);
 
 server.listen(8080, () => {
-    console.log(colors.cyan(`[${getLocalTime()}] Bilgi: Sunucu dinleniyor - http://localhost:3000`));
+    console.log(colors.cyan(`[${getLocalTime()}] Bilgi: Sunucu dinleniyor - http://localhost:8080`));
 });
 
 function getLocalTime() {
