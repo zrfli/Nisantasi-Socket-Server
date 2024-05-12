@@ -208,3 +208,7 @@ setInterval(clearConsole, 60000);
 server.listen(8080, () => {
     console.log(colors.cyan(`[${getLocalTime()}] Bilgi: Sunucu dinleniyor - http://localhost:8080`));
 });
+
+function getLocalTime() {
+    return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
+}
