@@ -202,3 +202,7 @@ server.listen(8080, () => {
 function getLocalTime() {
     return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
 }
+
+function generateAttendanceCode() {
+    return Math.random().toString(36).substr(2, 6).toUpperCase();
+}
