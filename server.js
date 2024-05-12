@@ -8,20 +8,13 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
-io.engine.on("headers", (headers, req) => {
-    headers["Access-Control-Allow-Origin"] = "http://misy.000.pe";
-    headers["Access-Control-Allow-Headers"] = "origin, x-requested-with, content-type";
-    headers["Access-Control-Allow-Methods"] = "PUT, GET, POST, DELETE, OPTIONS";
-});
-
-
 app.use(express.static('public'));
 
 const teacherHash = '3b0f26b84361585aa8dc65c2f35982e10226487048e2df6aebfc7212567e5d79';
 const studentHash = '2';
 
 const teachers = {};
-const activeVerification = {}; // Aktif doğrulama bilgileri
+const teacherCodes = {};
 
 io.on('connection', (socket) => {
     console.log(colors.yellow(`[${getLocalTime()}] Yeni bir kullanıcı bağlandı`));
@@ -51,92 +44,92 @@ io.on('connection', (socket) => {
             const studentId = userId;
             const studentFullName = userName;
 
+            // Öğrenci doğrulaması
+            const verifiedStudentId = verifyStudent(studentId);
+            if (!verifiedStudentId) {
+                socket.emit('loginFail', { message: 'Geçersiz öğrenci ID veya parola.' });
+                console.log(colors.red(`[${getLocalTime()}] Hata: Geçersiz öğrenci ID veya parola.`));
+                return;
+            }
+
             socket.emit('loginSuccess', { userId: studentId, role: 'student' });
             console.log(colors.green(`[${getLocalTime()}] Başarılı: ${studentFullName} (${studentId}) olarak öğrenci oturumu açıldı.`));
-
-            socket.on('verifyAttendanceCode', ({ code }) => {
-                if (!code || !activeVerification[code]) {
-                    console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya doğrulama bulunamadı.`));
-                    socket.emit('verifyAttendanceResult', { success: false, message: 'Yanlış kod veya doğrulama bulunamadı.' });
-                    return;
-                }
-
-                const { studentId: verifiedStudentId, teacherId } = activeVerification[code];
-
-                if (verifiedStudentId === studentId) {
-                    io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
-                    console.log(colors.cyan(`[${getLocalTime()}] ${studentFullName} (${studentId}) öğretmene kodu doğruladı: ${teacherId}`));
-
-                    // Doğrulama bilgisini temizle
-                    delete activeVerification[code];
-
-                    // Doğrulama sonucunu öğrenciye gönder
-                    socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
-                } else {
-                    console.log(colors.red(`[${getLocalTime()}] Hata: Yetkisiz erişim.`));
-                    socket.emit('verifyAttendanceResult', { success: false, message: 'Yetkisiz erişim.' });
-                }
-            });
         } else {
             socket.emit('loginFail', { message: 'Geçersiz kullanıcı ID veya parola.' });
             console.log(colors.red(`[${getLocalTime()}] Hata: Geçersiz kullanıcı ID veya parola.`));
         }
     });
 
-    socket.on('disconnect', () => {
-        const userId = findUserIdBySocketId(socket.id);
-        if (userId) {
-            handleUserDisconnect(socket, userId);
+    socket.on('verifyAttendanceCode', ({ studentId, code }) => {
+        if (!studentId || !code || !teacherCodes[code]) {
+            console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya yoklama kodu bulunamadı.`));
+            socket.emit('verifyAttendanceResult', { success: false, message: 'Yanlış kod veya yoklama kodu bulunamadı.' });
+            return;
         }
+
+        const teacherId = teacherCodes[code].teacherId;
+
+        // Doğrulama bilgisini temizle
+        delete teacherCodes[code];
+
+        // Yoklama bilgisini öğretmene gönder
+        io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
+        console.log(colors.cyan(`[${getLocalTime()}] ${studentId} öğrencisi yoklama kodunu doğruladı: ${code}`));
+
+        // Doğrulama sonucunu öğrenciye gönder
+        socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
+    });
+
+    socket.on('disconnect', () => {
+        handleUserDisconnect(socket);
     });
 
     function generateAttendanceCodeForTeacher(teacherId) {
         const attendanceCode = generateAttendanceCode();
-        activeVerification[attendanceCode] = { teacherId };
+        teacherCodes[attendanceCode] = { teacherId };
 
-        if (teachers[teacherId] && teachers[teacherId].socketId) {
-            io.to(teachers[teacherId].socketId).emit('attendanceCodeGenerated', { code: attendanceCode });
-            console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yoklama kodu oluşturuldu ve öğretmene gönderildi: ${attendanceCode}`));
-        }
+        io.to(teachers[teacherId].socketId).emit('attendanceCodeGenerated', { code: attendanceCode });
+        console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yoklama kodu oluşturuldu ve öğretmene gönderildi: ${attendanceCode}`));
     }
 
     function generateAttendanceCode() {
         return Math.random().toString(36).substr(2, 6).toUpperCase();
     }
 
-    function findUserIdBySocketId(socketId) {
-        const teacherId = Object.keys(teachers).find(key => teachers[key].socketId === socketId);
-        if (teacherId) return teacherId;
-
-        const verificationCode = Object.keys(activeVerification).find(key => activeVerification[key].teacherId === socketId);
-        if (verificationCode) return activeVerification[verificationCode].studentId;
-
-        return null;
+    function getLocalTime() {
+        return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
     }
 
-    function handleUserDisconnect(socket, userId) {
-        if (teachers[userId]) {
-            const teacherId = userId;
-            delete teachers[teacherId];
-            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${teacherId} öğretmen çıkış yaptı.`));
-        } else if (students[userId]) {
-            const studentId = userId;
-            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${studentId} öğrenci çıkış yaptı.`));
+    function verifyStudent(studentId) {
+        // Burada öğrenci doğrulama işlemleri yapılır
+        // Örneğin, öğrenci veritabanında var mı kontrol edilir
+        // Geçerli bir öğrenci ID ise ID'yi döndürür, değilse null döndürür
+        return studentId; // Örnekte sadece var olan bir ID'nin geçerli olduğunu varsayalım
+    }
+
+    function handleUserDisconnect(socket) {
+        const user = findUserBySocketId(socket.id);
+        if (!user) return;
+
+        const { userId, role } = user;
+        if (role === 'teacher') {
+            delete teachers[userId];
+            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${userId} öğretmen çıkış yaptı.`));
+        } else if (role === 'student') {
+            console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${userId} öğrenci çıkış yaptı.`));
         }
     }
+
+    function findUserBySocketId(socketId) {
+        const teacher = Object.values(teachers).find(teacher => teacher.socketId === socketId);
+        if (teacher) {
+            return { userId: teacher.userId, role: 'teacher' };
+        }
+        // Öğrenci kontrolü burada yapılabilir, örnek olarak teachers nesnesini kullanabilirsiniz
+        return null;
+    }
 });
-
-const clearConsole = () => {
-    console.clear();
-    console.log(colors.yellow(`[${getLocalTime()}] Konsol temizlendi - Son temizleme`));
-};
-
-setInterval(clearConsole, 60000);
 
 server.listen(8080, () => {
     console.log(colors.cyan(`[${getLocalTime()}] Bilgi: Sunucu dinleniyor - http://localhost:8080`));
 });
-
-function getLocalTime() {
-    return DateTime.now().setZone('Europe/Istanbul').toLocaleString(DateTime.DATETIME_FULL);
-}
