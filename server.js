@@ -98,17 +98,14 @@ io.on('connection', (socket) => {
             io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
             console.log(colors.cyan(`[${getLocalTime()}] ${students[studentId].name} (${studentId}) öğretmene kodu doğruladı: ${teacherId}`));
 
+            // Optionally, update the connected students list for the teacher
+            updateConnectedStudentsList(teachers[teacherId].socketId);
+
             // Send verification result back to the student
             socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
 
-            // Disconnect the user after verifying attendance
-            socket.disconnect(true);
-            console.log(colors.yellow(`[${getLocalTime()}] Kullanıcı oturumu kapatıldı: ${studentId}`));
-
-            // Clean up user data
-            delete students[studentId];
-            delete teacherCodes[code];
-            console.log(colors.yellow(`[${getLocalTime()}] Kullanıcı bilgileri temizlendi: ${studentId}`));
+            // Disconnect student's session after notifying the teacher
+            disconnectStudentSession(studentId);
         } else {
             // If teacher not found or teacher's socket not available
             console.log(colors.red(`[${getLocalTime()}] Hata: Öğretmen bulunamadı veya bağlantı yok. (${teacherId})`));
@@ -147,8 +144,24 @@ io.on('connection', (socket) => {
         io.to(socketId).emit('connectedStudentsList', { students: connectedStudents });
     }
 
-    function generateAttendanceCode() {
-        return Math.random().toString(36).substr(2, 6).toUpperCase();
+    function disconnectStudentSession(studentId) {
+        const studentSocketId = students[studentId].socketId;
+        const teacherId = Object.keys(teachers).find(key => teachers[key].socketId === studentSocketId);
+
+        // Remove student from connected students list of the teacher
+        if (teacherId && teachers[teacherId].socketId) {
+            const connectedStudents = Object.values(students).filter(student => student.socketId && student.socketId !== teachers[teacherId].socketId);
+            io.to(teachers[teacherId].socketId).emit('connectedStudentsList', { students: connectedStudents });
+        }
+
+        // Disconnect student's session
+        io.sockets.sockets[studentSocketId].disconnect(true);
+
+        // Clean up student data
+        delete students[studentId].attendanceCode;
+        delete students[studentId];
+
+        console.log(colors.yellow(`[${getLocalTime()}] Bilgi: ${studentId} öğrenci oturumu kapatıldı.`));
     }
 
     function findUserIdBySocketId(socketId) {
