@@ -69,23 +69,27 @@ io.on('connection', (socket) => {
     socket.on('verifyAttendanceCode', ({ studentId, code }) => {
         if (!studentId || !code || !teacherCodes[code] || !students[studentId]) {
             console.log(colors.red(`[${getLocalTime()}] Hata: Yanlış kod veya öğrenci bulunamadı.`));
+            socket.emit('verifyAttendanceResult', { success: false, message: 'Yanlış kod veya öğrenci bulunamadı.' });
             return;
         }
-
+    
         const teacherId = teacherCodes[code].teacherId;
-
+    
         if (students[studentId].attendanceCode === code) {
             console.log(colors.yellow(`[${getLocalTime()}] Uyarı: ${students[studentId].name} (${studentId}) zaten bu kodu doğruladı.`));
+            socket.emit('verifyAttendanceResult', { success: false, message: 'Bu kod zaten doğrulandı.' });
             return;
         }
-
+    
         students[studentId].attendanceCode = code;
-
+    
         if (teachers[teacherId] && teachers[teacherId].socketId) {
             io.to(teachers[teacherId].socketId).emit('studentAttendance', { studentId });
             console.log(colors.cyan(`[${getLocalTime()}] ${students[studentId].name} (${studentId}) öğretmen kodunu girdi: ${teacherId}`));
-
+    
             updateConnectedStudentsList(teachers[teacherId].socketId);
+    
+            socket.emit('verifyAttendanceResult', { success: true, message: 'Yoklama kodu başarıyla doğrulandı.' });
         }
     });
 
