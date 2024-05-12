@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Öğretmen Oturum Açma</title>
+</head>
+<body>
+    <h1>Öğretmen Oturum Açma</h1>
+    <label for="teacherId">Öğretmen ID:</label>
+    <input type="text" id="teacherId" placeholder="Öğretmen ID"><br><br>
+    <label for="teacherPassword">Parola:</label>
+    <input type="password" id="teacherPassword" placeholder="Parola"><br><br>
+    <button id="teacherLoginButton">Oturum Aç</button>
+
+    <div>
+        <h2>Aktif Öğrenciler</h2>
+        <ul id="studentList"></ul>
+    </div>
+
+    <div>
+        <h2>Yoklama Kodu</h2>
+        <div id="attendanceCodeDisplay"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.min.js"></script>
+    <script>
+        const socket = io('http://192.168.1.37:3000');
+
+        // Öğretmen oturum açma butonu
+        document.getElementById('teacherLoginButton').addEventListener('click', () => {
+            const teacherId = document.getElementById('teacherId').value;
+            const teacherPassword = document.getElementById('teacherPassword').value;
+
+            // Öğretmen ID ve parola bilgilerini sunucuya gönder
+            socket.emit('login', { userId: teacherId, passwordHash: teacherPassword });
+        });
+
+        // Oturum açma başarılı olduğunda
+        socket.on('loginSuccess', ({ userId }) => {
+            alert(`Öğretmen olarak başarıyla oturum açtınız! (Kullanıcı ID: ${userId})`);
+        });
+
+        // Oturum açma başarısız olduğunda
+        socket.on('loginFail', ({ message }) => {
+            alert(message);
+        });
+
+        // Sunucudan gelen öğrenci listesini göster
+       // Sunucudan gelen öğrenci listesini göster
+       socket.on('connectedStudentsList', ({ students }) => {
+            const studentListElement = document.getElementById('studentList');
+            studentListElement.innerHTML = ''; // Liste her güncellendiğinde temizle
+
+            students.forEach(student => {
+                const listItem = document.createElement('li');
+                const studentName = student.name;
+                const studentSocketId = student.socketId;
+                const studentId = student.studentId;
+
+                // Öğrenci adı ve soket kimliği içeren metin oluştur
+                let studentInfoText = `Öğrenci: ${studentName}, ${studentId}, Soket Kimliği: ${studentSocketId}`;
+
+                if (student.attendanceCode) {
+                    const attendanceCode = student.attendanceCode;
+                    studentInfoText += `, Yoklama Kodu: ${attendanceCode}`;
+                }
+
+                listItem.textContent = studentInfoText;
+                studentListElement.appendChild(listItem);
+            });
+        });
+
+        // Sunucudan gelen yoklama kodunu göster
+        socket.on('attendanceCodeGenerated', ({ code }) => {
+            const attendanceDisplay = document.getElementById('attendanceCodeDisplay');
+            attendanceDisplay.innerHTML = `<p>Yoklama Kodu: <strong>${code}</strong></p>`;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Öğrenci Oturum Açma</title>
+</head>
+<body>
+    <h1>Öğrenci Oturum Açma</h1>
+    <form id="studentLoginForm">
+        <label for="studentId">Öğrenci ID:</label>
+        <input type="text" id="studentId" placeholder="Öğrenci ID" required>
+        <label for="studentName">İsim:</label>
+        <input type="text" id="studentName" placeholder="İsim" required>
+        <label for="studentPassword">Parola:</label>
+        <input type="password" id="studentPassword" placeholder="Parola" required>
+        <button type="submit">Oturum Aç</button>
+    </form>
+
+    <hr>
+    <h2>Yoklama Kodu</h2>
+    <form id="attendanceCodeForm">
+        <label for="attendanceCode">Öğretmenin Yoklama Kodunu Girin:</label>
+        <input type="text" id="attendanceCode" placeholder="Yoklama Kodu" required>
+        <button type="submit">Gönder</button>
+    </form>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Öğrenci Oturum Açma Formu
+        document.getElementById('studentLoginForm').addEventListener('submit', (event) => {
+            event.preventDefault(); // Sayfanın yenilenmesini engelle
+
+            const studentId = document.getElementById('studentId').value;
+            const studentName = document.getElementById('studentName').value; // İsim buradan alınıyor
+            const studentPassword = document.getElementById('studentPassword').value;
+
+            socket.emit('login', { userId: studentId, userName: studentName, passwordHash: studentPassword });
+        });
+
+        // Yoklama Kodu Doğrulama Formu
+        document.getElementById('attendanceCodeForm').addEventListener('submit', (event) => {
+            event.preventDefault(); // Sayfanın yenilenmesini engelle
+
+            const studentId = document.getElementById('studentId').value;
+            const attendanceCode = document.getElementById('attendanceCode').value;
+
+            socket.emit('verifyAttendanceCode', { studentId, code: attendanceCode });
+        });
+
+        // Sunucudan Gelen Yanıtları İşleme
+        socket.on('loginSuccess', ({ userId }) => {
+            alert(`Öğrenci olarak başarıyla oturum açtınız! (Kullanıcı ID: ${userId})`);
+        });
+
+        socket.on('loginFail', ({ message }) => {
+            alert(message);
+        });
+    </script>
+</body>
+</html>
