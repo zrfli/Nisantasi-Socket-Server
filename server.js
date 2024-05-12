@@ -218,6 +218,10 @@ io.on('connection', (socket) => {
 });
 
 const clearConsole = () => {
+    console.log('TC' . teacherCodes);
+console.log('ST' . students);
+console.log('TT' . teachers);
+
     console.clear();
     console.log(colors.yellow(`[${getLocalTime()}] Konsol temizlendi - Son temizleme`));
 };
