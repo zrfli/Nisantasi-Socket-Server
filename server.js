@@ -17,6 +17,11 @@ const teachers = {};
 const students = {};
 const teacherCodes = {};
 
+console.log('TC' . teacherCodes);
+console.log('ST' . students);
+console.log('TT' . teachers);
+
+
 io.engine.on("headers", (headers, req) => {
     headers["Access-Control-Allow-Origin"] = "http://misy.000.pe";
     headers["Access-Control-Allow-Headers"] = "origin, x-requested-with, content-type";
