@@ -193,7 +193,7 @@ io.on('connection', (socket) => {
     }
 
     function generateAttendanceCode() {
-        return Math.random().toString(36).substr(2, 6).toUpperCase();
+        return Math.floor(100000 + Math.random() * 900000).toString();
     }
 
     function findUserIdBySocketId(socketId) {
