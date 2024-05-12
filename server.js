@@ -110,11 +110,17 @@ io.on('connection', (socket) => {
     });
 
     function generateNewTeacherCode(teacherId) {
+        // İlk kod oluşturulduğunda `teacherLastCode` nesnesine atama yapılıyor
+        teacherLastCode[teacherId] = generateNumericAttendanceCode(); 
+        console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${teacherLastCode[teacherId]}`));
+    
+        // Ardından her 30 saniyede bir kodu güncelleyen `setInterval` fonksiyonu başlatılıyor
         setInterval(() => {
-            teacherLastCode[teacherId] = generateNumericAttendanceCode(); // Her 30 saniyede bir yeni kod oluştur
+            teacherLastCode[teacherId] = generateNumericAttendanceCode();
             console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${teacherLastCode[teacherId]}`));
-        }, 30000); // 30 saniyede bir kod yenile
+        }, 30000); // 30 saniyede bir kod güncelleniyor
     }
+    
 
     function disconnectStudentSession(studentId) {
         const student = students[studentId];
