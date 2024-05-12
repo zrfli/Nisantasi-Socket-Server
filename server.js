@@ -18,7 +18,7 @@ const students = {};
 const teacherCodes = {};
 
 io.engine.on("headers", (headers, req) => {
-    headers["Access-Control-Allow-Origin"] = "http://192.168.1.37"
+    headers["Access-Control-Allow-Origin"] = "http://misy.000.pe"
     headers["Access-Control-Allow-Headers"] = "origin, x-requested-with, content-type"
     headers["Access-Control-Allow-Methodsn"] = "PUT, GET, POST, DELETE, OPTIONS"
 })
