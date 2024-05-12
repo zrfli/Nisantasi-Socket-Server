@@ -110,14 +110,23 @@ io.on('connection', (socket) => {
     });
 
     function generateNewTeacherCode(teacherId) {
-        // İlk kod oluşturulduğunda `teacherLastCode` nesnesine atama yapılıyor
-        teacherLastCode[teacherId] = generateNumericAttendanceCode(); 
-        console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${teacherLastCode[teacherId]}`));
+        // Yeni kod oluştur
+        const newCode = generateNumericAttendanceCode();
     
-        // Ardından her 30 saniyede bir kodu güncelleyen `setInterval` fonksiyonu başlatılıyor
+        // Öğretmenin son kodunu güncelle
+        teacherLastCode[teacherId] = newCode;
+    
+        // Öğretmene yeni kodu emit et
+        io.to(teachers[teacherId].socketId).emit('attendanceCodeGenerated', { code: newCode });
+    
+        console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${newCode}`));
+    
+        // Her 30 saniyede bir kodu güncelleyen setInterval
         setInterval(() => {
-            teacherLastCode[teacherId] = generateNumericAttendanceCode();
-            console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Yeni kod oluşturuldu ve öğretmene gönderildi: ${teacherLastCode[teacherId]}`));
+            const updatedCode = generateNumericAttendanceCode();
+            teacherLastCode[teacherId] = updatedCode;
+            io.to(teachers[teacherId].socketId).emit('teacherNewCode', { code: updatedCode });
+            console.log(colors.magenta(`[${getLocalTime()}] Bilgi: Kod güncellendi ve öğretmene gönderildi: ${updatedCode}`));
         }, 30000); // 30 saniyede bir kod güncelleniyor
     }
     
@@ -164,7 +173,7 @@ io.on('connection', (socket) => {
     }
 
     function generateNumericAttendanceCode() {
-        return Math.floor(Math.random() * 9000) + 1000; // Rastgele 4 basamaklı sayı üretir
+        return Math.floor(Math.random() * 900000) + 100000; // Rastgele 4 basamaklı sayı üretir
     }
 
     function findUserIdBySocketId(socketId) {
